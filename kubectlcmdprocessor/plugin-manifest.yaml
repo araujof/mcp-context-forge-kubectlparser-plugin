@@ -1,0 +1,6 @@
+description: "A KubeCtl command parser and pre-processor"
+author: "Fred Araujo"
+version: "0.1.0"
+available_hooks:
+  - "tool_pre_hook"
+default_configs:
