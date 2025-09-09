@@ -152,7 +152,7 @@ class KubectlParser:
                 i += 1
 
         # Define verbs that take arguments directly (no resource type)
-        DIRECT_ARG_VERBS = {"logs", "exec", "attach", "port-forward", "cp", "debug"}
+        DIRECT_ARG_VERBS = {"logs", "exec", "attach", "port-forward", "cp", "debug", "apply"}
 
         # Parse remaining tokens
         while i < len(tokens):
@@ -248,6 +248,7 @@ class KubectlParser:
                 "-p",
                 "-f",
                 "-k",
+                "--patch",
             }
 
             if flag in value_flags:
@@ -321,6 +322,14 @@ def main():
         'kubectl patch deployment ad -n otel-demo --type=\'json\' -p=\'[{"op": "add", "path": "/spec/template/spec/containers/0/env/-", "value": {"name": "GRPC_RETRY_CONFIG", "value": "<your-grpc-retry-config>"}}]\'',
         # Logs
         "kubectl logs checkout-6548d7f8cb-8455c -n otel-demo",
+        # Selectors
+        "kubectl get deployments -n otel-demo -o jsonpath='...' --selector=service in (ad,cart,payment)",
+        "kubectl get pods -n otel-demo -l service in (email,checkout)",
+        "kubectl get services  --all-namespaces --field-selector metadata.namespace!=default",
+        # Other corners cases
+        "kubectl logs -n <namespace> $(kubectl get pods -n <namespace> --selector=app=frontend -o jsonpath='{.items[0].metadata.name}')",
+        "kubectl edit deployment checkout -n otel-demo --patch '{\"spec\":{\"template\":{\"spec\":{\"containers\":[{\"name\":\"checkout\",\"image\":\"quay.io/it-bench/supported-checkout-service-arm64:0.0.3\"}]}}}}'",
+
     ]
 
     for cmd in test_commands:
