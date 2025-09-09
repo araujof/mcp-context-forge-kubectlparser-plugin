@@ -140,10 +140,8 @@ class KubectlParser:
 
         # Find the verb (first non-flag token)
         while i < len(tokens) and tokens[i].startswith("-"):
-            self._parse_flag(tokens[i], tokens, i)
-            i += 1
-            if i < len(tokens) and not tokens[i].startswith("-"):
-                i += 1  # Skip flag value if present
+            flag_consumed = self._parse_flag(tokens[i], tokens, i)
+            i += flag_consumed
 
         if i < len(tokens):
             potential_verb = tokens[i]
@@ -197,7 +195,7 @@ class KubectlParser:
         Parse a single flag and its potential value
 
         Returns:
-            Number of tokens consumed (1 for flag only, 2 for flag + value)
+            Number of tokens consumed (1 for flag only, 2+ for flag + value(s))
         """
         # Handle namespace flag specially
         if flag in ["-n", "--namespace"]:
@@ -214,8 +212,60 @@ class KubectlParser:
             name, value = flag.split("=", 1)
             if name == "--namespace":
                 self.command["namespace"] = value
-            self.command["flags"].append({"name": name, "value": value})
-            return 1
+
+            # For selector flags, check if we need to continue parsing after the =
+            if name in ["-l", "--selector"]:
+                # Start with the value after =, then continue parsing additional tokens
+                selector_tokens = [value]
+                i = index + 1
+                paren_depth = value.count("(") - value.count(")")
+
+                while i < len(tokens):
+                    token = tokens[i]
+
+                    # Stop if we hit another flag (unless we're inside parentheses)
+                    if token.startswith("-") and paren_depth == 0:
+                        break
+
+                    selector_tokens.append(token)
+
+                    # Track parentheses depth
+                    paren_depth += token.count("(") - token.count(")")
+
+                    i += 1
+
+                    # After adding this token, decide if we should continue
+                    if paren_depth == 0 and selector_tokens:
+                        # If we have balanced parentheses, check if we should continue
+                        if i < len(tokens):
+                            next_token = tokens[i]
+                            # Stop if next token is a flag
+                            if next_token.startswith("-"):
+                                break
+                            # Continue if next token is a known selector operator or continuation
+                            selector_operators = {"and", "or", "!=", "==", "=", "in", "notin", ","}
+                            # Check if the next token contains selector operators or is parenthetical
+                            is_operator = next_token.lower() in selector_operators or any(op in next_token for op in ["=", "!", "<", ">", ","]) or next_token.startswith("(")
+
+                            # If the current token has parentheses or next token is an operator, continue
+                            # Otherwise stop - we've likely collected the complete selector
+                            if not is_operator:
+                                # Special case: if last token was 'in' or 'notin', continue to get the value list
+                                last_token = selector_tokens[-1].lower() if len(selector_tokens) > 0 else ""
+                                if last_token not in ["in", "notin"]:
+                                    break
+
+                # Join the tokens with spaces to form the complete selector expression
+                selector_value = " ".join(selector_tokens)
+                self.command["flags"].append({"name": name, "value": selector_value})
+                return 1 + len(selector_tokens) - 1  # flag + additional tokens (value after = is already included)
+            else:
+                self.command["flags"].append({"name": name, "value": value})
+                return 1
+
+        # Handle selector flags that may have complex expressions
+        if flag in ["-l", "--selector"]:
+            return self._parse_selector_flag(flag, tokens, index)
 
         # Check if next token is a value for this flag
         if index + 1 < len(tokens) and not tokens[index + 1].startswith("-"):
@@ -227,8 +277,6 @@ class KubectlParser:
                 "--watch",
                 "--sort-by",
                 "--field-selector",
-                "--selector",
-                "-l",
                 "--kubeconfig",
                 "--context",
                 "--cluster",
@@ -259,6 +307,67 @@ class KubectlParser:
         # Flag without value
         self.command["flags"].append({"name": flag, "value": None})
         return 1
+
+    def _parse_selector_flag(self, flag: str, tokens: List[str], index: int) -> int:
+        """
+        Parse selector flags (-l, --selector) that may have complex expressions
+        like 'service in (email,checkout)' without quotes
+
+        Returns:
+            Number of tokens consumed
+        """
+        if index + 1 >= len(tokens):
+            self.command["flags"].append({"name": flag, "value": None})
+            return 1
+
+        # Start collecting selector tokens
+        selector_tokens = []
+        i = index + 1
+        paren_depth = 0
+
+        while i < len(tokens):
+            token = tokens[i]
+
+            # Stop if we hit another flag (unless we're inside parentheses)
+            if token.startswith("-") and paren_depth == 0:
+                break
+
+            selector_tokens.append(token)
+
+            # Track parentheses depth
+            paren_depth += token.count("(") - token.count(")")
+
+            i += 1
+
+            # After adding this token, decide if we should continue
+            if paren_depth == 0 and selector_tokens:
+                # If we have balanced parentheses, check if we should continue
+                if i < len(tokens):
+                    next_token = tokens[i]
+                    # Stop if next token is a flag
+                    if next_token.startswith("-"):
+                        break
+                    # Continue if next token is a known selector operator or continuation
+                    selector_operators = {"and", "or", "!=", "==", "=", "in", "notin", ","}
+                    # Check if the next token contains selector operators or is parenthetical
+                    is_operator = next_token.lower() in selector_operators or any(op in next_token for op in ["=", "!", "<", ">", ","]) or next_token.startswith("(")
+
+                    # If the current token has parentheses or next token is an operator, continue
+                    # Otherwise stop - we've likely collected the complete selector
+                    if not is_operator:
+                        # Special case: if last token was 'in' or 'notin', continue to get the value list
+                        last_token = selector_tokens[-1].lower() if selector_tokens else ""
+                        if last_token not in ["in", "notin"]:
+                            break
+
+        if selector_tokens:
+            # Join the tokens with spaces to form the complete selector expression
+            selector_value = " ".join(selector_tokens)
+            self.command["flags"].append({"name": flag, "value": selector_value})
+            return 1 + len(selector_tokens)  # flag + all selector tokens
+        else:
+            self.command["flags"].append({"name": flag, "value": None})
+            return 1
 
 
 def main():
@@ -328,8 +437,7 @@ def main():
         "kubectl get services  --all-namespaces --field-selector metadata.namespace!=default",
         # Other corners cases
         "kubectl logs -n <namespace> $(kubectl get pods -n <namespace> --selector=app=frontend -o jsonpath='{.items[0].metadata.name}')",
-        "kubectl edit deployment checkout -n otel-demo --patch '{\"spec\":{\"template\":{\"spec\":{\"containers\":[{\"name\":\"checkout\",\"image\":\"quay.io/it-bench/supported-checkout-service-arm64:0.0.3\"}]}}}}'",
-
+        'kubectl edit deployment checkout -n otel-demo --patch \'{"spec":{"template":{"spec":{"containers":[{"name":"checkout","image":"quay.io/it-bench/supported-checkout-service-arm64:0.0.3"}]}}}}\'',
     ]
 
     for cmd in test_commands:
