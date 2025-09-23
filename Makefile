@@ -50,7 +50,7 @@ CONTAINER_RUNTIME ?= $(shell command -v docker >/dev/null 2>&1 && echo docker ||
 # CONTAINER_RUNTIME ?= docker
 
 # Container port
-CONTAINER_PORT ?= 8000
+CONTAINER_PORT ?= 8007
 CONTAINER_INTERNAL_PORT ?= 8000
 
 print-runtime:
