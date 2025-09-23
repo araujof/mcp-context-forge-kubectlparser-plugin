@@ -1131,7 +1131,7 @@ dev = [
 requires-dist = [
     { name = "black", marker = "extra == 'dev'", specifier = ">=25.1.0" },
     { name = "chuk-mcp-runtime", specifier = ">=0.6.5" },
-    { name = "mcp-contextforge-gateway", git = "https://github.com/IBM/mcp-context-forge.git?rev=main" },
+    { name = "mcp-contextforge-gateway", git = "https://github.com/araujof/mcp-context-forge.git?rev=fix%2Fopa_plugin_multiarch" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.4.1" },
     { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=1.1.0" },
     { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=6.2.1" },
@@ -1309,7 +1309,7 @@ wheels = [
 [[package]]
 name = "mcp-contextforge-gateway"
 version = "0.7.0"
-source = { git = "https://github.com/IBM/mcp-context-forge.git?rev=main#0528aadb9c7714c07e28dfcd2e7f10a87250ef7e" }
+source = { git = "https://github.com/araujof/mcp-context-forge.git?rev=fix%2Fopa_plugin_multiarch#3de00b92f4550c382debde4cd19bff5ec3626cd3" }
 dependencies = [
     { name = "aiohttp" },
     { name = "alembic" },
