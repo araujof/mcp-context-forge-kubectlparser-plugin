@@ -10,6 +10,7 @@ from mcpgateway.plugins.framework import (
     PluginManager,
     GlobalContext,
     ToolPreInvokePayload,
+    ToolHookType,
 )
 
 from kubectlcmdprocessor.plugin import CONTEXT_KEY_POLICY_CONTEXT, CONTEXT_KEY_KUBECTL_CMD
@@ -30,7 +31,7 @@ async def test_tool_pre_hook(plugin_manager: PluginManager):
     # Customize payload for testing
     payload = ToolPreInvokePayload(name="kubectl_tool", args={"arg0": "kubectl get pods"})
     global_context = GlobalContext(request_id="1")
-    result, ctx = await plugin_manager.tool_pre_invoke(payload, global_context)
+    result, ctx = await plugin_manager.invoke_hook(ToolHookType.TOOL_PRE_INVOKE, payload, global_context)
     context = next(iter(ctx.values()))
     cmd = context.global_context.state[CONTEXT_KEY_POLICY_CONTEXT][CONTEXT_KEY_KUBECTL_CMD]
     assert cmd["command"]["verb"] == "get"
